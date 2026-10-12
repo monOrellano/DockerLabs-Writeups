@@ -1,4 +1,3 @@
-# DockerLabs-Writeups
 # PinguPenguin
 
 - **Datos:**
