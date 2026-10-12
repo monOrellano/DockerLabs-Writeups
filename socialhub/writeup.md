@@ -8,7 +8,7 @@
 
 | Elemento | Detalle |
 |----------|---------|
-| **Cadena de ataque** | 1) Credenciales por defecto `[CREDENCIALES_ADMIN_REDACTADAS]` 2) Feed admin revela credenciales SSH `[CREDENCIALES_SSH_REDACTADAS]` 3) SSH como `hijacking` (uid 1001) 4) Enumeración local: sin permisos sudo y sin una vía de escalada SUID confirmada ni ejercida 5) Flask corriendo como root (UID 0) 6) Cómputo del PIN de Werkzeug 3.0.1 con inputs del contenedor 7) RCE en `/console` autenticado con PIN → root 8) Flag en `/root/root.txt` |
+| **Cadena de ataque** | 1) Credenciales por defecto `admin:admin123` 2) Feed admin revela credenciales SSH `hijacking:cookiedelicious` 3) SSH como `hijacking` (uid 1001) 4) Enumeración local: sin permisos sudo y sin una vía de escalada SUID confirmada ni ejercida 5) Flask corriendo como root (UID 0) 6) Cómputo del PIN de Werkzeug 3.0.1 con inputs del contenedor 7) RCE en `/console` autenticado con PIN → root 8) Flag en `/root/root.txt` |
 | **Hallazgo principal** | Escalada de privilegios vía PIN de Werkzeug debugger expuesto en producción (debug=True) con proceso Flask corriendo como root |
 | **Posible XSS almacenado** | Se observó SVG servido como `image/svg+xml` y renderizado mediante `<object>` en `/feed` y `/profile`. No se obtuvo callback OOB que demostrara ejecución en un navegador víctima; no fue el mecanismo que produjo el acceso root |
 
@@ -96,12 +96,12 @@ SocialHub es una red social minimalista con:
 
 ```text
 admin 200 
-[CREDENCIALES_ADMIN_REDACTADAS] 302 http://TARGET_IP:5000/feed
+admin:admin123 302 http://TARGET_IP:5000/feed
 password 200 
 ...
 ```
 
-**Resultado:** Credenciales válidas `[CREDENCIALES_ADMIN_REDACTADAS]` (302 redirect a `/feed`).
+**Resultado:** Credenciales válidas `admin:admin123` (302 redirect a `/feed`).
 
 ### 4.2 Credenciales SSH en feed de admin
 
@@ -109,12 +109,12 @@ password 200
 
 ```html
 <p>👤 Usuario: <span style="color: #4fd1c5">hijacking</span></p>
-<p>🔑 Password: <span style="color: #4fd1c5">[CREDENCIALES_SSH_REDACTADAS]</span></p>
+<p>🔑 Password: <span style="color: #4fd1c5">hijacking:cookiedelicious</span></p>
 ```
 
 **Credenciales obtenidas:**
 - **Usuario:** `hijacking`
-- **Contraseña:** `[CREDENCIALES_SSH_REDACTADAS]`
+- **Contraseña:** `hijacking:cookiedelicious`
 
 ---
 
@@ -137,7 +137,7 @@ VERSION_ID="22.04"
 
 **Sudo:**
 ```bash
-echo '[CREDENCIALES_SSH_REDACTADAS]' | sudo -S -l 2>&1
+echo 'hijacking:cookiedelicious' | sudo -S -l 2>&1
 # [sudo] password for hijacking: Sorry, user hijacking may not run sudo on [HOSTNAME_REDACTADO].
 ```
 
@@ -258,16 +258,16 @@ En Werkzeug 3.0.1, `get_machine_id()` toma el primer valor no vacío entre `/etc
 
 **Salida del generador del PIN:**
 ```text
-Flask:[PIN_REDACTADO]:[TOKEN_REDACTADO]
-app:[PIN_REDACTADO_2]:[TOKEN_REDACTADO_2]
+Flask:130-149-657:[TOKEN_REDACTADO]
+app:130-149-657:[TOKEN_REDACTADO_2]
 ```
 
 **Respuesta del endpoint durante la validación:**
 ```text
-Flask:[PIN_REDACTADO]:[TOKEN_REDACTADO]:200:{"auth": true, "exhausted": false}
+Flask:130-149-657:[TOKEN_REDACTADO]:200:{"auth": true, "exhausted": false}
 ```
 
-**PIN correcto:** `[PIN_REDACTADO]` (para `modname=flask.app`, `appname=Flask`, `username=root`)
+**PIN correcto:** `130-149-657` (para `modname=flask.app`, `appname=Flask`, `username=root`)
 
 Distinción entre el secreto del debugger y el nombre de la cookie: El token de 20 caracteres utilizado en las solicitudes al debugger corresponde al secreto de sesión del debugger (self.secret), generado mediante gen_salt(20). Este valor no debe confundirse con el nombre de la cookie de autenticación. Werkzeug calcula el nombre de la cookie por separado: utiliza el prefijo __wzd seguido de 20 caracteres hexadecimales derivados del SHA-1 con cookiesalt. El secreto transitorio se omite en esta publicación.
 
@@ -289,7 +289,7 @@ La respuesta `{"auth": true, "exhausted": false}` confirma que el PIN enviado fu
 
 ### 8.1 Acceso a `/console` con PIN
 
-Tras ingresar `[PIN_REDACTADO]` en la interfaz web del debugger, se obtiene consola Python interactiva en el contexto de la aplicación Flask (corriendo como root).
+Tras ingresar `130-149-657` en la interfaz web del debugger, se obtiene consola Python interactiva en el contexto de la aplicación Flask (corriendo como root).
 
 ### 8.2 Ejecución de comandos (evidencia literal)
 
@@ -361,13 +361,13 @@ Flag: {SUID_ENV_PRIVESC_SUCCESS}
 |------|--------|---------|-----------|
 | 1 | Reconocimiento | nmap -sV | Puertos 22 (SSH), 5000 (Werkzeug 3.0.1) |
 | 2 | Análisis web | Navegación manual | App SocialHub, warning de XSS SVG en home |
-| 3 | Fuerza bruta admin | Diccionario básico | `[CREDENCIALES_ADMIN_REDACTADAS]` válido |
-| 4 | Explotación admin feed | Lectura de HTML | Credenciales SSH `[CREDENCIALES_SSH_REDACTADAS]` |
+| 3 | Fuerza bruta admin | Diccionario básico | `admin:admin123` válido |
+| 4 | Explotación admin feed | Lectura de HTML | Credenciales SSH `hijacking:cookiedelicious` |
 | 5 | Acceso SSH | Login con credenciales | Shell `hijacking` (uid 1001) |
 | 6 | Enum. local | sudo -l, find SUID, cron, caps | Sin vector local verificado |
 | 7 | Descubrimiento proceso Flask | `ps`, `/proc/PID/status` | Flask PID 83718 corriendo como **root** |
 | 8 | Recolección inputs PIN | `/etc/machine-id`, MAC contenedor, cgroup, ruta flask | 6 inputs para algoritmo exacto |
-| 9 | Cómputo PIN offline | SHA-1 + formato grupos 3-3-3 | PIN `[PIN_REDACTADO]` |
+| 9 | Cómputo PIN offline | SHA-1 + formato grupos 3-3-3 | PIN `130-149-657` |
 | 10 | Validación PIN | POST a `/console` | `{"auth": true}` |
 | 11 | RCE en consola | `__import__("os").popen(cmd)` | Ejecución arbitraria como **root** |
 | 12 | Flag | `cat /root/root.txt` | `{SUID_ENV_PRIVESC_SUCCESS}` |
@@ -375,7 +375,7 @@ Flag: {SUID_ENV_PRIVESC_SUCCESS}
 ### 11.2 Causa raíz
 
 La **combinación de tres fallos de configuración** permite la escalada completa:
-1. **Credenciales por defecto** en cuenta administrativa (`[CREDENCIALES_ADMIN_REDACTADAS]`)
+1. **Credenciales por defecto** en cuenta administrativa (`admin:admin123`)
 2. **Divulgación de credenciales SSH** en funcionalidad legítima (feed admin muestra credenciales de "siguiente nivel")
 3. **Flask en modo debug (`debug=True`) ejecutándose como root** en puerto expuesto, habilitando `/console` con PIN computable desde información del contenedor (machine-id del contenedor, MAC del contenedor, usuario root)
 
